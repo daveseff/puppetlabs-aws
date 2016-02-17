@@ -1,5 +1,4 @@
 require_relative '../../puppet_x/puppetlabs/property/tag.rb'
-require 'puppet/property/boolean'
 
 Puppet::Type.newtype(:ec2_volume) do
   @doc = 'type representing an EC2 Block Device'
@@ -88,6 +87,7 @@ Puppet::Type.newtype(:ec2_volume) do
       fail 'iops should be an integer' unless value =~ /^\d+$/
     end
   end
+<<<<<<< HEAD
 
   newproperty(:kms_key_id) do
     desc 'The full ARN of the AWS Key Management Service (AWS KMS) customer master key (CMK) to use when creating the encrypted volume.'
@@ -99,4 +99,6 @@ Puppet::Type.newtype(:ec2_volume) do
   newproperty(:encrypted, parent: Puppet::Property::Boolean) do
     desc 'Indicates whether newly created volume should be encrypted.'
   end
+=======
+>>>>>>> Support for managing EC2 Volumes
 end
