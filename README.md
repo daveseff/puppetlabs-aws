@@ -623,11 +623,8 @@ The name of the instance. This is the value of the AWS Name tag.
 
 ##### `security_groups`
 
-Optional.
-
-The security groups with which to associate the instance.
-
-Accepts an array of security group names.
+##### `egress`
+*Optional* Rules for egress traffic. Accepts an array. If no egress rules are specified, the security group will default to ALL outbound traffic allowed.
 
 ##### `tags`
 
