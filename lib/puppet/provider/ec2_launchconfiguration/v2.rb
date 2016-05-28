@@ -16,7 +16,6 @@ Puppet::Type.type(:ec2_launchconfiguration).provide(:v2, :parent => PuppetX::Pup
             launch_configs << new(hash)
           end
         end
-puts "launch_configs: #{launch_configs}"
         launch_configs
       rescue Timeout::Error, StandardError => e
         raise PuppetX::Puppetlabs::FetchingAWSDataError.new(region, self.resource_type.name.to_s, e.message)
@@ -37,7 +36,6 @@ puts "launch_configs: #{launch_configs}"
   def self.config_to_hash(region, config)
     # It appears possible to get launch configurations manually to a state where
     # they return the identifier of an invalid or a non-existent security groups
-# puts "config_to_hash(#{config})"
     security_group_names = begin
       group_response = ec2_client(region).describe_security_groups(group_ids: config.security_groups)
       group_response.data.security_groups.collect(&:group_name)
@@ -61,7 +59,6 @@ puts "launch_configs: #{launch_configs}"
       key_name: config.key_name,
       ensure: :present,
       region: region,
-      block_device_mappings: config.block_device_mappings,
       spot_price: config.spot_price,
       ebs_optimized: config.ebs_optimized,
     }
@@ -108,7 +105,6 @@ puts "launch_configs: #{launch_configs}"
       security_groups: group_ids,
       instance_type: resource[:instance_type],
       user_data: data,
-      block_device_mappings: resource[:block_device_mappings],
     }
 
     key = resource[:key_name] ? resource[:key_name] : false
