@@ -42,7 +42,6 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
   def self.db_instance_to_hash(region, instance)
     db_subnet = instance.db_subnet_group ? instance.db_subnet_group.db_subnet_group_name : nil
 
-    # tags stuff requires aws sdk >= 2.6.11
     rds_tags = {}
     db_tags = rds_client(region).list_tags_for_resource( resource_name: instance.db_instance_arn )
     db_tags.tag_list.each do |rds_tag|
