@@ -217,6 +217,13 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
       rds_client(resource[:region]).create_db_instance(config)
     end
 
+    with_retries(:max_tries => 5) do
+      rds_client(region).add_tags_to_resource(
+        resources: response.data.db_instance.db_instance_arn,
+        tags: tags_for_resource
+      )
+    end
+
     @property_hash[:ensure] = :present
   end
 
