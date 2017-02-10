@@ -215,6 +215,9 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
 
       rds_client(resource[:region]).restore_db_instance_from_db_snapshot(config)
     else
+      if resource[:engine].start_with?('sqlserver')
+        config[:timezone] = resource[:timezone]
+      end
       Puppet.info("Starting DB instance #{name}")
       rds_client(resource[:region]).create_db_instance(config)
     end
