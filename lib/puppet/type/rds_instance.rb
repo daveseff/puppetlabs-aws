@@ -203,6 +203,13 @@ Not applicable. Must be null.'
     end
   end
 
+  newproperty(:timezone) do
+    desc 'The time zone of the DB instance. The time zone parameter is currently supported only by Microsoft SQL Server.'
+    validate do |value|
+      fail 'db_option_group should be a String' unless value.is_a?(String)
+    end
+  end
+
   newparam(:final_db_snapshot_identifier) do
     desc 'Name given to the last snapshot on deletion.'
     validate do |value|
