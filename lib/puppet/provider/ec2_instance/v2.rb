@@ -107,6 +107,8 @@ Puppet::Type.type(:ec2_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
       tags: tags,
       region: region,
       tenancy: instance.placement.tenancy,
+      host_id: instance.placement.host_id,
+      affinity: instance.placement.affinity,
       hypervisor: instance.hypervisor,
       termination_protection: term_att,
       iam_instance_profile_arn: instance.iam_instance_profile ? instance.iam_instance_profile.arn : nil,
@@ -313,6 +315,8 @@ Found #{matching_groups.length}:
         placement: {
           availability_zone: resource[:availability_zone],
           tenancy: resource[:tenancy],
+          host_id: resource[:host_id],
+          affinity: resource[:affinity],
         },
         monitoring: {
           enabled: resource[:monitoring].to_s,
