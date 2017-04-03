@@ -9,7 +9,7 @@ Puppet::Type.type(:elb_loadbalancer).provide(:v2, :parent => PuppetX::Puppetlabs
     Puppet.debug('Fetching ELB instances')
     regions.collect do |region|
         load_balancers = []
-        elbs do |lb|
+        elbs(region) do |lb|
           retries = 0
           begin
             load_balancers << new(load_balancer_to_hash(region, lb, ref_catalog))
@@ -32,32 +32,30 @@ Puppet::Type.type(:elb_loadbalancer).provide(:v2, :parent => PuppetX::Puppetlabs
     end.flatten
   end
 
-  def self.elbs
+  def self.elbs(region)
     # Make the calls to elb_client for each of the regions to fetch the ELB
     # resource information, yielding the individual ELB objects.
-    regions.collect do |region|
+    region_client = elb_client(region)
+    Puppet.debug("Calling for ELB descriptions")
+    response = region_client.describe_load_balancers()
+    marker = response.next_marker
 
-      region_client = elb_client(region)
-      Puppet.debug("Calling for ELB descriptions")
-      response = region_client.describe_load_balancers()
+    response.load_balancer_descriptions.each do |lb|
+      yield lb
+    end
+
+    while marker
+      Puppet.debug("Calling for marked ELB description")
+      response = region_client.describe_load_balancers({
+        marker: marker
+      })
       marker = response.next_marker
-
       response.load_balancer_descriptions.each do |lb|
         yield lb
       end
-
-      while marker
-        Puppet.debug("Calling for marked ELB description")
-        response = region_client.describe_load_balancers({
-          marker: marker
-        })
-        marker = response.next_marker
-        response.load_balancer_descriptions.each do |lb|
-          yield lb
-        end
-      end
     end
   end
+
 
   read_only(:region, :scheme, :tags, :dns_name)
 
