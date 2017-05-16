@@ -110,7 +110,7 @@ Puppet::Type.type(:ec2_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
       host_id: instance.placement.host_id,
       affinity: instance.placement.affinity,
       hypervisor: instance.hypervisor,
-      termination_protection: term_att,
+      disable_api_termination: term_att,
       iam_instance_profile_arn: instance.iam_instance_profile ? instance.iam_instance_profile.arn : nil,
       virtualization_type: instance.virtualization_type,
       security_groups: instance.security_groups.collect(&:group_name),
