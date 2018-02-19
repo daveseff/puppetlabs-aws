@@ -1,10 +1,13 @@
 require 'spec_helper_acceptance'
 require 'securerandom'
 
+require 'pry-byebug'
+
 describe "ec2_securitygroup" do
 
   before(:all) do
-    @default_region = 'sa-east-1'
+    @default_region = 'us-east-1'
+    @name_prefix = "cc-test-sg"
     @aws = AwsHelper.new(@default_region)
     @template = 'securitygroup.pp.tmpl'
   end
@@ -71,7 +74,7 @@ describe "ec2_securitygroup" do
   describe 'should create a new security group' do
 
     before(:all) do
-      @name = "#{PuppetManifest.env_id}-#{SecureRandom.uuid}"
+      @name = "#{@name_prefix}-#{rand(9999)}"
       @config = {
         :name => @name,
         :ensure => 'present',
@@ -175,7 +178,7 @@ describe "ec2_securitygroup" do
 
     describe 'that another group depends on in a secondary manifest' do
       before(:each) do
-        @name_2 = "#{PuppetManifest.env_id}-#{SecureRandom.uuid}"
+        @name_2 =  "#{@name_prefix}-#{rand(9999)}"
         new_config = {
           :name => @name_2,
           # need both sgs by name to trigger a potential issue here
@@ -210,7 +213,7 @@ describe "ec2_securitygroup" do
   describe 'should create a new securitygroup' do
 
     before(:each) do
-      @name = "#{PuppetManifest.env_id}-#{SecureRandom.uuid}"
+      @name = "#{@name_prefix}-#{rand(9999)}"
       @config = {
         :name => @name,
         :ensure => 'present',
@@ -281,7 +284,7 @@ describe "ec2_securitygroup" do
   describe 'should create a new securitygroup' do
 
     before(:each) do
-      @name = "#{PuppetManifest.env_id}-#{SecureRandom.uuid}"
+      @name =  "#{@name_prefix}-#{rand(9999)}"
       @config = {
         :name => @name,
         :ensure => 'present',
@@ -329,7 +332,7 @@ describe "ec2_securitygroup" do
 
     before(:all) do
       @config = {
-        :name         => "#{PuppetManifest.env_id}-#{SecureRandom.uuid}",
+        :name         => "#{@name_prefix}-#{rand(9999)}",
         :ensure       => 'present',
         :description  => 'A_security_group_used_in_an_automated_acceptance_test',
         :region       => @default_region,
@@ -412,7 +415,7 @@ describe "ec2_securitygroup" do
           i.each do |key, value|
             keys = key == :port ? ['from_port', 'to_port'] : [key]
             keys.each do |new_key|
-              regex = /('#{new_key}')(\s*)(=>)(\s*)('#{value}')/
+              regex = new_key =~ /(\s*)_port/ ? /('#{new_key}')(\s*)(=>)(\s*)(#{value})/ : /('#{new_key}')(\s*)(=>)(\s*)('#{value}')/
               expect(@response.stdout).to match(regex)
             end
           end
@@ -432,7 +435,7 @@ describe "ec2_securitygroup" do
   describe 'should create a new security group' do
 
     before(:all) do
-      @name = "#{PuppetManifest.env_id}-#{SecureRandom.uuid}"
+      @name = "#{@name_prefix}-#{rand(9999)}"
       @config = {
         :name => @name,
         :ensure => 'present',

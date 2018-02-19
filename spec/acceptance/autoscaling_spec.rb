@@ -4,7 +4,10 @@ require 'securerandom'
 describe "ec2_autoscalinggroup" do
 
   before(:all) do
-    @default_region = 'sa-east-1'
+    @default_region = 'us-east-1'
+    @default_ami = 'ami-2121764b'
+    @default_instance_size = 't1.micro'
+    @name = "cc-test"
     @default_availability_zone = "#{@default_region}a"
     @aws = AwsHelper.new(@default_region)
   end
@@ -33,10 +36,11 @@ describe "ec2_autoscalinggroup" do
     alarm.first
   end
 
+  include_context 'cleanse AWS resources for the test'  
+
   describe 'autoscaling_group and related types' do
 
     before(:all) do
-      name = "#{PuppetManifest.env_id}-#{SecureRandom.uuid}"
       @asg_template = 'autoscaling_configurable.pp.tmpl'
       @asg_template_delete = 'autoscaling_configurable_delete.pp.tmpl'
       @lb_template = 'autoscaling_configurable_lbs.pp.tmpl'
@@ -44,17 +48,16 @@ describe "ec2_autoscalinggroup" do
       @duplicate_asg_template = 'autoscaling_duplicate.pp.tmpl'
       @dup_template_delete = 'autoscaling_duplicate_delete.pp.tmpl'
       @sg_delete = 'sg_delete.pp.tmpl'
-
-      @lb_name = "#{name}-lb".gsub(/[^a-zA-Z0-9]/, '')[0...31] # adhere to the LB's naming restrictions
+      @lb_name = "#{@name}-lb"
 
       # launch asg and related resources
       @asg_config = {
         :ensure               => 'present',
         :region               => @default_region,
-        :sg_name              => "#{name}-sg",
-        :lc_name              => "#{name}-lc",
-        :sg_setting           => "#{name}-sg",
-        :asg_name             => "#{name}-asg",
+        :sg_name              => "#{@name}-sg",
+        :lc_name              => "#{@name}-lc",
+        :sg_setting           => "#{@name}-sg",
+        :asg_name             => "#{@name}-asg",
         :min_size             => 2,
         :max_size             => 6,
         :desired_capacity     => 3,
@@ -62,24 +65,24 @@ describe "ec2_autoscalinggroup" do
         :health_check_type    => 'EC2',
         :health_check_grace_period => 100,
         :new_instances_protected_from_scale_in => false,
-        :lc_setting           => "#{name}-lc",
-        :availability_zones   => ["#{@default_region}a", "#{@default_region}b"],
-        :policy_name          => "#{name}-policy",
-        :second_policy_name   => "#{name}-second_policy",
+        :lc_setting           => "#{@name}-lc",
+        :availability_zones   => ["#{@default_region}a", "#{@default_region}c"],
+        :policy_name          => "#{@name}-policy",
+        :second_policy_name   => "#{@name}-second_policy",
         :scaling_adjustment   => 30,
         :adjustment_type      => 'PercentChangeInCapacity',
-        :alarm_name           => "#{name}-cw_alarm",
+        :alarm_name           => "#{@name}-cw_alarm",
         :metric               => 'CPUUtilization',
         :namespace            => 'AWS/EC2',
         :statistic            => 'Average',
         :period               => 120,
         :threshold            => 70,
         :comparison_operator  => 'GreaterThanOrEqualToThreshold',
-        :asg_setting          => "#{name}-asg",
+        :asg_setting          => "#{@name}-asg",
         :evaluation_periods   => 2,
-        :alarm_actions        => "#{name}-policy",
+        :alarm_actions        => "#{@name}-policy",
         :tags                 => {
-          :custom_name => "#{name}-asg",
+          :custom_name => "#{@name}-asg",
           :department  => 'engineering',
           :project     => 'cloud',
           :created_by  => 'aws-acceptance'
@@ -107,8 +110,8 @@ describe "ec2_autoscalinggroup" do
       }
       @duplicate_asg_config = {
         :region       => @default_region,
-        :sg2_name      => "#{name}-sg2",
-        :lc2_name      => "#{name}-lc2",
+        :sg2_name      => "#{@name}-sg2",
+        :lc2_name      => "#{@name}-lc2",
       }
       # Mustache doesn't do nested data very well, so this creates a separate template renders for the main config and load balancers.
       # This is primarily to keep the templates and config similar to the elb_loadbalancer tests, and not have to rename everything from there.
@@ -156,7 +159,6 @@ describe "ec2_autoscalinggroup" do
       result = PuppetManifest.new(@asg_template, @asg_config).apply
       expect(result.exit_code).to eq(0)
     end
-
     context 'should create' do
 
       context 'an auto scaling group' do
@@ -169,7 +171,7 @@ describe "ec2_autoscalinggroup" do
           expect(@group.min_size).to eq(@asg_config[:min_size])
           expect(@group.max_size).to eq(@asg_config[:max_size])
           expect(@group.launch_configuration_name).to eq(@asg_config[:lc_setting])
-          expect(@group.availability_zones).to contain_exactly('sa-east-1a', 'sa-east-1b')
+          expect(@group.availability_zones).to contain_exactly('us-east-1a', 'us-east-1c')
           expect(@group.tags).to have_attributes(size: 4)
 
           custom_name_tag = @group.tags.select { |t| t.key == 'custom_name' }
@@ -182,14 +184,13 @@ describe "ec2_autoscalinggroup" do
       end
 
       context 'a launch configuration' do
-
         before(:all) do
           @lc = find_launch_config(@asg_config[:lc_name])
         end
 
         it 'with the correct properties' do
-          expect(@lc.image_id).to eq('ami-67a60d7a')
-          expect(@lc.instance_type).to eq('t1.micro')
+          expect(@lc.image_id).to eq(@default_ami)
+          expect(@lc.instance_type).to eq(@default_instance_size)
         end
 
       end
@@ -255,12 +256,12 @@ describe "ec2_autoscalinggroup" do
         end
 
         it 'period is corrrect' do
-          regex = /period\s*=>\s*'#{@cw.period}'/
+          regex = /period\s*=>\s*#{@cw.period}/
           expect(@result.stdout).to match(regex)
         end
 
         it 'threshold is correct' do
-          regex = /threshold\s*=>\s*'#{@cw.threshold}'/
+          regex = /threshold\s*=>\s*#{@cw.threshold}/
           expect(@result.stdout).to match(regex)
         end
 
@@ -274,7 +275,7 @@ describe "ec2_autoscalinggroup" do
         end
 
         it 'evaluation_periods' do
-          regex = /evaluation_periods\s*=>\s*'#{@cw.evaluation_periods}'/
+          regex = /evaluation_periods\s*=>\s*#{@cw.evaluation_periods}/
           expect(@result.stdout).to match(regex)
         end
 
@@ -296,22 +297,22 @@ describe "ec2_autoscalinggroup" do
         end
 
         it 'min_size' do
-          regex = /min_size\s*=>\s*'#{@asg.min_size}'/
+          regex = /min_size\s*=>\s*#{@asg.min_size}/
           expect(@result.stdout).to match(regex)
         end
 
         it 'max_size' do
-          regex = /max_size\s*=>\s*'#{@asg.max_size}'/
+          regex = /max_size\s*=>\s*#{@asg.max_size}/
           expect(@result.stdout).to match(regex)
         end
 
         it 'desired_capacity' do
-          regex = /desired_capacity\s*=>\s*'#{@asg.desired_capacity}'/
+          regex = /desired_capacity\s*=>\s*#{@asg.desired_capacity}/
           expect(@result.stdout).to match(regex)
         end
 
         it 'default_cooldown' do
-          regex = /default_cooldown\s*=>\s*'#{@asg.default_cooldown}'/
+          regex = /default_cooldown\s*=>\s*#{@asg.default_cooldown}/
           expect(@result.stdout).to match(regex)
         end
 
@@ -321,12 +322,12 @@ describe "ec2_autoscalinggroup" do
         end
 
         it 'health_check_grace_period' do
-          regex = /health_check_grace_period\s*=>\s*'#{@asg.health_check_grace_period}'/
+          regex = /health_check_grace_period\s*=>\s*#{@asg.health_check_grace_period}/
           expect(@result.stdout).to match(regex)
         end
 
         it 'new_instances_protected_from_scale_in' do
-          regex = /health_check_grace_period\s*=>\s*'#{@asg.health_check_grace_period}'/
+          regex = /health_check_grace_period\s*=>\s*#{@asg.health_check_grace_period}/
           expect(@result.stdout).to match(regex)
         end
 
@@ -336,12 +337,12 @@ describe "ec2_autoscalinggroup" do
         end
 
         it 'instance_count' do
-          regex = /instance_count\s*=>\s*'#{@asg.instances.count}'/
+          regex = /instance_count\s*=>\s*#{@asg.instances.count}/
           expect(@result.stdout).to match(regex)
         end
 
         it 'availability_zones' do
-          ["#{@default_region}a", "#{@default_region}b"].each do |az|
+          ["#{@default_region}a", "#{@default_region}c"].each do |az|
             regex = /'#{az}'/
             expect(@result.stdout).to match(regex)
           end
@@ -367,7 +368,7 @@ describe "ec2_autoscalinggroup" do
           response = @aws.ec2_client.describe_security_groups(group_ids: @lc.security_groups)
           names = response.data.security_groups.collect(&:group_name)
           names.each do |name|
-            expect(@result.stdout).to match(/#{name}/)
+            expect(@result.stdout).to match(/#{@name}/)
           end
         end
 
@@ -410,7 +411,7 @@ describe "ec2_autoscalinggroup" do
         end
 
         it 'scaling_adjustment' do
-          regex = /scaling_adjustment\s*=>\s*'#{@sp.scaling_adjustment}'/
+          regex = /scaling_adjustment\s*=>\s*#{@sp.scaling_adjustment}/
           expect(@result.stdout).to match(regex)
         end
 
@@ -598,7 +599,7 @@ describe "ec2_autoscalinggroup" do
 
       it 'availability_zones' do
         config = @asg_config.clone
-        config[:availability_zones] = ["#{@default_region}b"]
+        config[:availability_zones] = ["#{@default_region}c"]
         r = PuppetManifest.new(@asg_template, config).apply
         expect(r.stderr).not_to match(/error/i)
         group = find_autoscaling_group(@asg_config[:asg_name])
@@ -647,5 +648,4 @@ describe "ec2_autoscalinggroup" do
       end
     end
   end
-
 end

@@ -149,7 +149,6 @@ This could be because some other process is modifying AWS at the same time."""
         response = ec2_client.describe_account_attributes(
           attribute_names: ['supported-platforms']
         )
-
         account_types = response.account_attributes.map(&:attribute_values).flatten.map(&:attribute_value)
         account_types == ['VPC']
       end
@@ -258,17 +257,20 @@ This could be because some other process is modifying AWS at the same time."""
         self.class.cloudfront_client(region)
       end
 
-      def tags_for_resource
+      # builds the Name key tag 
+      def extract_resource_name_from_tag
         tags = resource[:tags] ? resource[:tags].map { |k,v| {key: k, value: v} } : []
         tags << {key: 'Name', value: name}
       end
 
-      def self.name_from_tag(item)
+      # finds the Name tag we use for matching.
+      def self.extract_name_from_tag(item)
         name_tag = item.tags.detect { |tag| tag.key == 'Name' }
         name_tag ? name_tag.value : nil
       end
 
-      def self.tags_for(item)
+      # Removes Name tag we use for matching.
+      def self.remove_name_from_tags(item)
         tags = {}
         item.tags.each do |tag|
           tags[tag.key] = tag.value unless tag.key == 'Name'
@@ -351,11 +353,96 @@ This could be because some other process is modifying AWS at the same time."""
             if response.data.vpcs.first.to_hash.keys.include?(:group_name)
               response.data.vpcs.first.group_name
             elsif response.data.vpcs.first.to_hash.keys.include?(:tags)
-              name_from_tag(response.data.vpcs.first)
+              extract_name_from_tag(response.data.vpcs.first)
             end
         end
 
         @vpcs[region][vpc_id]
+      end
+
+      # Set up the @ec2_instances.  Always call this method before using
+      # @security_groups. @security_groups[region] keeps track of security
+      # group IDs => names discovered per region, to prevent duplicate API
+      # calls.
+      def self.init_ec2_instances(region)
+        @ec2_instances ||= {}
+        @ec2_instances[region] ||= {}
+      end
+
+      def self.ec2_instance_id_from_name(region, instance_name)
+        self.ec2_instance_ids_from_names(region, [instance_name]).first
+      end
+
+      def self.ec2_instance_ids_from_names(region, instance_names)
+        self.init_ec2_instances(region)
+
+        instance_names_to_discover = []
+        instance_names.each do |instance_name|
+          next if @ec2_instances[region].has_value?(instance_name)
+          instance_names_to_discover << instance_name
+        end
+
+        unless instance_names_to_discover.empty?
+          Puppet.debug("Calling ec2_client to resolve instances: #{instance_names_to_discover}")
+
+          instance_info = ec2_client(region).describe_isntances(filters: [{
+            name: 'tag:Name',
+            values: instance_names_to_discover,
+          }])
+
+          # TODO Check if we have next_token on the response
+
+          instance_info.each do |response|
+            response.data.reservations.each do |reservation|
+              reservation.instances.each do |instance|
+                instance_name_tag = instance.tags.detect { |tag| tag.key == 'Name' }
+                if instance_name_tag
+                  @ec2_instances[region][instance.instance_id]= instance_name_tag.value
+                end
+              end
+            end
+          end
+        end
+
+        instance_names.collect do |instance_name|
+          @security_groups[region].key(instance_name)
+        end.compact
+      end
+
+      def self.ec2_instance_name_from_id(region, instance_id)
+        self.ec2_instance_names_from_ids(region, [instance_id]).first
+      end
+
+      def self.ec2_instance_names_from_ids(region, instance_ids)
+        self.init_ec2_instances(region)
+
+        instance_ids_to_discover = []
+        instance_ids.each do |instance_id|
+          next if @ec2_instances[region].has_key?(instance_id)
+          instance_ids_to_discover << instance_id
+        end
+
+        unless instance_ids_to_discover.empty?
+          Puppet.debug("Calling ec2_client to resolve instances: #{instance_ids_to_discover}")
+          instance_info = ec2_client(region).describe_instances(instance_ids: instance_ids_to_discover)
+
+          # TODO Check if we have next_token on the response
+
+          instance_info.each do |response|
+            response.data.reservations.each do |reservation|
+              reservation.instances.each do |instance|
+                instance_name_tag = instance.tags.detect { |tag| tag.key == 'Name' }
+                if instance_name_tag
+                  @ec2_instances[region][instance.instance_id]= instance_name_tag.value
+                end
+              end
+            end
+          end
+        end
+
+        instance_ids.collect do |instance_id|
+          @ec2_instances[region][instance_id]
+        end.compact
       end
 
       # Set up @security_groups. Always call this method before using
@@ -376,10 +463,12 @@ This could be because some other process is modifying AWS at the same time."""
 
         sg_names_to_discover = []
         sg_names.each do |sg_name|
-          sg_names_to_discover << sg_name unless @security_groups[region].has_value?(sg_name)
+          next if @security_groups[region].has_value?(sg_name)
+          sg_names_to_discover << sg_name
         end
 
         unless sg_names_to_discover.empty?
+          Puppet.debug("Calling ec2_client to resolve security_groups: #{sg_names_to_discover}")
           sg_info = ec2_client(region).describe_security_groups(filters: [{
             name: 'group-name',
             values: sg_names_to_discover,
@@ -408,6 +497,7 @@ This could be because some other process is modifying AWS at the same time."""
         end
 
         unless sg_ids_to_discover.empty?
+          Puppet.debug("Calling ec2_client to resolve security_groups: #{sg_ids_to_discover}")
           sg_info = ec2_client(region).describe_security_groups(group_ids: sg_ids_to_discover)
 
           sg_info.security_groups.each do |sg|
@@ -420,10 +510,86 @@ This could be because some other process is modifying AWS at the same time."""
         end.compact
       end
 
+      # Set up @subnets. Always call this method before using @subnets.
+      # @subnets[region] keeps track of subnet IDs => names discovered per
+      # region, to prevent duplicate API calls.
+      def self.init_subnets(region)
+        @subnets ||= {}
+        @subnets[region] ||= {}
+      end
+
+      def self.subnet_id_from_name(region, subnet_name)
+        self.subnet_ids_from_names(region, [subnet_name]).first
+      end
+
+      def self.subnet_ids_from_names(region, subnet_names)
+        self.init_subnets(region)
+
+        subnet_names_to_discover = []
+        subnet_names.each do |subnet_name|
+          next if @subnets[region].has_value?(subnet_name)
+          subnet_names_to_discover << subnet_name
+        end
+
+        unless subnet_names_to_discover.empty?
+          Puppet.debug("Calling ec2_client to resolve subnets: #{subnet_names_to_discover}")
+          subnet_info = ec2_client(region).describe_subnets(filters: [{
+            name: 'tag:Name',
+            value: subnet_names_to_discover
+          }])
+
+          subnet_info.subnets.each do |subnet|
+            subnet_name_tag = subnet.tags.detect { |tag| tag.key == 'Name' }
+            if subnet_name_tag
+              @subnets[region][subnet.subnet_id] = subnet_name_tag.value
+            end
+          end
+        end
+
+        subnet_names.collect do |subnet_name|
+          @security_groups[region].key(subnet_name)
+        end.compact
+      end
+
+      def self.subnet_name_from_id(region, subnet_id)
+        self.subnet_names_from_ids(region, [subnet_id]).first
+      end
+
+      def self.subnet_names_from_ids(region, subnet_ids)
+        self.init_subnets(region)
+
+        subnet_ids_to_discover = []
+        subnet_ids.each do |subnet_id|
+          next if @subnets[region].has_key?(subnet_id)
+          subnet_ids_to_discover << subnet_id
+        end
+
+        unless subnet_ids_to_discover.empty?
+          Puppet.debug("Calling ec2_client to resolve subnets: #{subnet_ids_to_discover}")
+          subnet_info = ec2_client(region).describe_subnets(
+            subnet_ids: subnet_ids_to_discover
+          )
+
+          subnet_info.subnets.each do |subnet|
+            subnet_name_tag = subnet.tags.detect { |tag| tag.key == 'Name' }
+            if subnet_name_tag
+              @subnets[region][subnet.subnet_id] = subnet_name_tag.value
+            end
+          end
+        end
+
+        subnet_ids.collect do |subnet_id|
+          @subnets[region][subnet_id]
+        end.compact
+      end
+
+
+      ####
+
       def self.customer_gateway_name_from_id(region, gateway_id)
         @customer_gateways ||= name_cache_hash do |ec2, key|
           response = ec2.describe_customer_gateways(customer_gateway_ids: [key])
-          name_from_tag(response.data.customer_gateways.first)
+          extract_name_from_tag(response.data.customer_gateways.first)
         end
 
         @customer_gateways[[region, gateway_id]]
@@ -432,7 +598,7 @@ This could be because some other process is modifying AWS at the same time."""
       def self.vpn_gateway_name_from_id(region, gateway_id)
         @vpn_gateways ||= name_cache_hash do |ec2, key|
           response = ec2.describe_vpn_gateways(vpn_gateway_ids: [key])
-          name_from_tag(response.data.vpn_gateways.first)
+          extract_name_from_tag(response.data.vpn_gateways.first)
         end
         @vpn_gateways[[region, gateway_id]]
       end
@@ -440,7 +606,7 @@ This could be because some other process is modifying AWS at the same time."""
       def self.options_name_from_id(region, options_id)
         @dhcp_options ||= name_cache_hash do |ec2, key|
           response = ec2.describe_dhcp_options(dhcp_options_ids: [key])
-          name_from_tag(response.dhcp_options.first)
+          extract_name_from_tag(response.dhcp_options.first)
         end
 
         @dhcp_options[[region, options_id]]
@@ -471,11 +637,11 @@ This could be because some other process is modifying AWS at the same time."""
           elsif key
             begin
               igw_response = ec2.describe_internet_gateways(internet_gateway_ids: [key])
-              name_from_tag(igw_response.data.internet_gateways.first)
+              extract_name_from_tag(igw_response.data.internet_gateways.first)
             rescue ::Aws::EC2::Errors::InvalidInternetGatewayIDNotFound
               begin
                 vgw_response = ec2.describe_vpn_gateways(vpn_gateway_ids: [key])
-                name_from_tag(vgw_response.data.vpn_gateways.first)
+                extract_name_from_tag(vgw_response.data.vpn_gateways.first)
               rescue ::Aws::EC2::Errors::InvalidVpnGatewayIDNotFound
                 nil
               end
@@ -516,7 +682,6 @@ This could be because some other process is modifying AWS at the same time."""
         # integers to integers, etc.  Array values are recursively normalized.
         # Hash values are normalized using the normalize_hash method.
         #
-        require 'pp'
         if value.is_a? String
           return true if value == 'true'
           return false if value == 'false'

@@ -1,6 +1,8 @@
-require 'aws-sdk-core'
+require 'aws-sdk'
 require 'mustache'
 require 'open3'
+
+Dir["./spec/acceptance/support/*.rb"].sort.each { |f| require f }
 
 if ENV['PUPPET_AWS_USE_BEAKER'] and ENV['PUPPET_AWS_USE_BEAKER'] == 'yes'
   require 'beaker-rspec'
@@ -147,15 +149,31 @@ class AwsHelper
     response.data.db_subnet_groups
   end
 
+
+  def get_terminated_instances(name)
+    response = @ec2_client.describe_instances(filters: [
+      {name: 'tag:Name', values: [name]},
+    ])
+    instances = []
+    response.data.reservations.each do |reservation|
+      reservation.instances.each do |instance|
+        instances.push(instance) if instance.state.name == 'terminated'
+      end
+    end
+    instances
+  end
+  
   def get_instances(name)
     response = @ec2_client.describe_instances(filters: [
       {name: 'tag:Name', values: [name]},
     ])
-    response.data.reservations.collect do |reservation|
-      reservation.instances.collect do |instance|
-        instance
+    instances = []
+    response.data.reservations.each do |reservation|
+      reservation.instances.each do |instance|
+        instances.push(instance) unless instance.state.name == 'terminated' || instance.state.name == 'shutting-down'
       end
-    end.flatten
+    end
+    instances
   end
 
   def get_groups(name)
@@ -237,7 +255,14 @@ class AwsHelper
 
   def tag_difference(item, tags)
     item_tags = {}
-    item.tags.each { |s| item_tags[s.key.to_sym] = s.value if s.key != 'Name' }
+    if item.is_a?(Aws::RDS::Types::DBInstance)
+      tag_list = @rds_client.list_tags_for_resource({resource_name: item.db_instance_arn}).tag_list
+      tag_list.each do |tag|
+        item_tags[tag.key.to_sym] = tag.value unless tag.key == 'Name'
+      end
+    else
+      item.tags.each { |s| item_tags[s.key.to_sym] = s.value if s.key != 'Name' }
+    end
     tags.to_set ^ item_tags.to_set
   end
 

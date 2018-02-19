@@ -6,8 +6,11 @@ require 'base64'
 describe "ec2_instance" do
 
   before(:all) do
-    @default_region = 'sa-east-1'
-    @default_availability_zone = "#{@default_region}a"
+    @default_region = 'us-east-1'
+    @default_ami = 'ami-2121764b'
+    @default_instance_size = 't1.micro'
+    @name = "cc-test"
+    @default_availability_zone = "#{@default_region}b"
     @aws = AwsHelper.new(@default_region)
     @template = 'instance.pp.tmpl'
   end
@@ -18,15 +21,17 @@ describe "ec2_instance" do
     instances.first
   end
 
+  include_context 'cleanse AWS resources for the test'  
+
   describe 'should create a new instance' do
 
     before(:all) do
       user_data = 'echo Hello World'
       @config = {
-        :name => "#{PuppetManifest.env_id}-#{SecureRandom.uuid}",
-        :instance_type => 't1.micro',
+        :name => @name,
+        :instance_type => @default_instance_size,
         :region => @default_region,
-        :image_id => 'ami-67a60d7a',
+        :image_id => @default_ami,
         :ensure => 'present',
         :tags => {
           :department => 'engineering',
@@ -36,7 +41,9 @@ describe "ec2_instance" do
         :tenancy => 'dedicated',
         :device_name => '/dev/sda1',
         :volume_size => 8,
-        :optional => {:user_data => user_data}
+        :optional => {
+          :user_data => user_data,
+        }
       }
 
 
@@ -109,9 +116,8 @@ describe "ec2_instance" do
       public_ip_address, private_ip_address" do
       @aws.ec2_client.wait_until(:instance_running, instance_ids: [@instance.instance_id])
       instance = get_instance(@config[:name])
-      expect(instance.public_dns_name).to match(/\.compute\.amazonaws\.com/)
-      expect(instance.private_dns_name).to match(/\.compute\.internal/)
-      expect{ IPAddr.new(instance.public_ip_address) }.not_to raise_error
+      expect(instance.public_dns_name).to match(/\.compute\-1\.amazonaws\.com/) 
+      expect(instance.private_dns_name).to match(/\.ec2\.internal/)
       expect{ IPAddr.new(instance.private_ip_address) }.not_to raise_error
     end
 
@@ -128,10 +134,10 @@ describe "ec2_instance" do
   describe 'should not create a new instance' do
     before(:each) do
       @config = {
-        :name => "#{PuppetManifest.env_id}-#{SecureRandom.uuid}",
-        :instance_type => 't1.micro',
+        :name => @name,
+        :instance_type => @default_instance_size,
         :region => @default_region,
-        :image_id => 'ami-67a60d7a',
+        :image_id => @default_ami,
         :ensure => 'present',
         :tags => {
           :department => 'engineering',
@@ -140,7 +146,7 @@ describe "ec2_instance" do
         },
         :tenancy => 'dedicated',
         :device_name => '/dev/sda1',
-        :volume_size => 8,
+        :volume_size => 8
       }
     end
 
@@ -198,10 +204,10 @@ describe "ec2_instance" do
 
     before(:each) do
       @config = {
-        :name => "#{PuppetManifest.env_id}-#{SecureRandom.uuid}",
-        :instance_type => 't1.micro',
-        :region => 'sa-east-1',
-        :image_id => 'ami-67a60d7a',
+        :name => @name,
+        :instance_type => @default_instance_size,
+        :region => @default_region,
+        :image_id => @default_ami,
         :ensure => 'present',
         :tags => {
           :department => 'engineering',
@@ -209,7 +215,7 @@ describe "ec2_instance" do
           :created_by => 'aws-acceptance'
         },
         :device_name => '/dev/sda1',
-        :volume_size => 8,
+        :volume_size => 8
       }
 
       PuppetManifest.new(@template, @config).apply
@@ -251,10 +257,10 @@ describe "ec2_instance" do
 
     let(:config) do
       {
-        :name => "#{PuppetManifest.env_id}-#{SecureRandom.uuid}",
-        :instance_type => 't1.micro',
-        :region => 'sa-east-1',
-        :image_id => 'ami-67a60d7a',
+        :name => @name,
+        :instance_type => @default_instance_size,
+        :region => @default_region,
+        :image_id => @default_ami,
         :ensure => 'present',
         :tags => {
           :department => 'engineering',
@@ -262,7 +268,7 @@ describe "ec2_instance" do
           :created_by => 'aws-acceptance'
         },
         :device_name => '/dev/sda1',
-        :volume_size => 8,
+        :volume_size => 8
       }
     end
 
@@ -297,10 +303,10 @@ describe "ec2_instance" do
     before(:all) do
       user_data = "'echo Hello World'"
       @config = {
-        :name => "#{PuppetManifest.env_id}-#{SecureRandom.uuid}",
-        :instance_type => 't1.micro',
+        :name => @name,
+        :instance_type => @default_instance_size,
         :region => @default_region,
-        :image_id => 'ami-67a60d7a',
+        :image_id => @default_ami,
         :ensure => 'present',
         :monitoring => false,
         :availability_zone => @default_availability_zone,
@@ -358,12 +364,7 @@ describe "ec2_instance" do
     end
 
     it 'ebs_obtimized is correct' do
-      regex = /(ebs_optimized)(\s*)(=>)(\s*)('false')/
-      expect(@result.stdout).to match(regex)
-    end
-
-    it 'kernel_id is reported' do
-      regex = /(kernel_id)(\s*)(=>)(\s*)/
+      regex = /(ebs_optimized)(\s*)(=>)(\s*)(false)/
       expect(@result.stdout).to match(regex)
     end
 
@@ -388,7 +389,7 @@ describe "ec2_instance" do
     end
 
     it 'monitoring is correct' do
-      regex = /(monitoring)(\s*)(=>)(\s*)('#{@config[:monitoring]}')/
+      regex = /(monitoring)(\s*)(=>)(\s*)(#{@config[:monitoring]})/
       expect(@result.stdout).to match(regex)
     end
 
@@ -397,10 +398,7 @@ describe "ec2_instance" do
       expect(@result.stdout).to match(regex)
     end
 
-    it 'public_dns_name is reported' do
-      regex = /(public_dns_name)(\s*)(=>)(\s*)('#{@instance.public_dns_name}')/
-      expect(@result.stdout).to match(regex)
-    end
+    # Public IP is not verified, as it depends on the subnet that is created for the test.
 
     it 'key_name is correct' do
       if ENV['AWS_KEY_PAIR']
@@ -419,11 +417,6 @@ describe "ec2_instance" do
 
     it 'private_ip_address is reported' do
       regex = /(private_ip_address)(\s*)(=>)(\s*)('#{@instance.private_ip_address}')/
-      expect(@result.stdout).to match(regex)
-    end
-
-    it 'public_ip_address is reported' do
-      regex = /(public_ip_address)(\s*)(=>)(\s*)('#{@instance.public_ip_address}')/
       expect(@result.stdout).to match(regex)
     end
 
@@ -459,10 +452,10 @@ describe "ec2_instance" do
 
     before(:each) do
       @config = {
-        :name => "#{PuppetManifest.env_id}-#{SecureRandom.uuid}",
-        :instance_type => 't1.micro',
-        :region => 'sa-east-1',
-        :image_id => 'ami-67a60d7a',
+        :name => @name,
+        :instance_type => @default_instance_size,
+        :region => @default_region,
+        :image_id => @default_ami,
         :ensure => 'present',
         :ensure_eip => 'attached',
         :tags => {
@@ -471,7 +464,7 @@ describe "ec2_instance" do
           :created_by => 'aws-acceptance'
         },
         :device_name => '/dev/sda1',
-        :volume_size => 8,
+        :volume_size => 8
       }
 
       @eip_template = 'eip.pp.tmpl'
@@ -506,10 +499,10 @@ describe "ec2_instance" do
     before(:all) do
       @iam_arn_template = 'instance.pp.tmpl'
       @config = {
-        :name => "#{PuppetManifest.env_id}-#{SecureRandom.uuid}",
-        :instance_type => 't1.micro',
+        :name => @name,
+        :instance_type => @default_instance_size,
         :region => @default_region,
-        :image_id => 'ami-67a60d7a',
+        :image_id => @default_ami,
         :ensure => 'present',
         :tags => {
           :department => 'engineering',
@@ -517,7 +510,7 @@ describe "ec2_instance" do
           :created_by => 'aws-acceptance'
         },
         :device_name => '/dev/sda1',
-        :volume_size => 8,
+        :volume_size => 8
       }
 
       # The value for this ENV var must be an existing IAM role in your Amazon account
@@ -531,12 +524,12 @@ describe "ec2_instance" do
     end
 
     after(:all) do
-      @aws.ec2_client.wait_until(:instance_running, instance_ids:[@instance.instance_id])
+      @aws.ec2_client.wait_until(:instance_running, instance_ids:[@instance.instance_id]) if @instance
 
       new_config = @config.update({:ensure => 'absent'})
       PuppetManifest.new(@iam_arn_template, new_config).apply
 
-      @aws.ec2_client.wait_until(:instance_terminated, instance_ids:[@instance.instance_id])
+      @aws.ec2_client.wait_until(:instance_terminated, instance_ids:[@instance.instance_id]) if @instance
     end
 
     it "with the specified IAM ROLE" do
@@ -546,5 +539,5 @@ describe "ec2_instance" do
         expect(@instance.iam_instance_profile).to be_nil
       end
     end
-  end
+  end  
 end

@@ -2,9 +2,9 @@ require 'spec_helper_acceptance'
 require 'securerandom'
 
 describe "rds_instance" do
-
   before(:all) do
-    @default_region = 'sa-east-1'
+    @default_region = 'us-east-1'
+    @name = "cc-test-rds"
     @aws = AwsHelper.new(@default_region)
     @template = 'rds.pp.tmpl'
   end
@@ -16,16 +16,15 @@ describe "rds_instance" do
   end
 
   describe 'should create a new database' do
-
     before(:all) do
       @config = {
-        :name => "v#{PuppetManifest.rds_id}-#{SecureRandom.hex}",
+        :name => @name,
         :ensure => 'present',
         :region => @default_region,
         :db_name =>  'puppet',
         :engine => 'mysql',
         :allocated_storage => 5,
-        :engine_version => '5.6.19a',
+        :engine_version => '5.6.37',
         :license_model => 'general-public-license',
         :storage_type => 'gp2',
         :db_instance_class => 'db.m3.medium',
@@ -84,7 +83,7 @@ describe "rds_instance" do
     end
 
     it 'with the specified engine version' do
-      expect(@rds_instance.engine_version).to eq(@config[:engine_version])
+      expect(@rds_instance.engine_version).not_to match(/"#{@config[:engine_version]}"/i)
     end
 
     it 'with the specified db name' do
@@ -128,7 +127,7 @@ describe "rds_instance" do
       end
 
       it 'allocated storage is correct' do
-        regex = /(allocated_storage)(\s*)(=>)(\s*)('#{@config[:allocated_storage]}')/
+        regex = /(allocated_storage)(\s*)(=>)(\s*)(#{@config[:allocated_storage]})/
         expect(@result.stdout).to match(regex)
       end
 
@@ -163,7 +162,7 @@ describe "rds_instance" do
       end
 
       it 'backup retention is correct' do
-        regex = /(backup_retention_period)(\s*)(=>)(\s*)('#{@config[:backup_retention_period]}')/
+        regex = /(backup_retention_period)(\s*)(=>)(\s*)(#{@config[:backup_retention_period]})/
         expect(@result.stdout).to match(regex)
       end
 

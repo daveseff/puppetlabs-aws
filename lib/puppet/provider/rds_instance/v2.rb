@@ -207,7 +207,7 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
         :vpc_security_group_ids,
       ]
 
-      if ['mysql', 'mariadb'].include?(resource[:engine].downcase)
+      if ['mariadb', 'mysql', 'postgres'].include?(resource[:engine].downcase)
         remove_from_config << :db_name
       end
 
@@ -267,7 +267,7 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
           rds_instance_update[k] = v
         }
 
-        rds_client.modify_db_instance(rds_instance_update)
+        rds_client(@property_hash[:region]).modify_db_instance(rds_instance_update)
       end
     end
 

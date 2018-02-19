@@ -39,7 +39,7 @@ Puppet::Type.type(:route53_zone).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
           resource_type: 'hostedzone',
           resource_id: id,
         })
-        zone_hash[:tags] = self.tags_for(tags.resource_tag_set)
+        zone_hash[:tags] = self.remove_name_from_tags(tags.resource_tag_set)
 
         # VPCs for private zones.
         if zone_hash[:is_private]
@@ -63,7 +63,7 @@ Puppet::Type.type(:route53_zone).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
       end
 
       break unless response.is_truncated
-      list_ops[:marker] = response.next_marker
+      list_opts[:marker] = response.next_marker
     end
 
     zones
