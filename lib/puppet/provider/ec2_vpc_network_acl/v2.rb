@@ -37,9 +37,7 @@ Puppet::Type.type(:ec2_vpc_network_acl).provide(:v2, :parent => PuppetX::Puppetl
       name: name,
       id: acl.network_acl_id,
       ensure: :present,
-      #associations: acl.associations,
-      #entries: acl.entries,
-      vpc_id: acl.vpc_id,
+      vpc: vpc_name_from_id(region, acl.vpc_id),
       region: region,
       tags: remove_name_from_tags(acl),
     }
