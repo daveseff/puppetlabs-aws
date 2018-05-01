@@ -50,7 +50,7 @@ Puppet::Type.type(:ec2_vpc_network_acl).provide(:v2, :parent => PuppetX::Puppetl
       }
     end
 
-    entries = acl.entries.collect do |entry|
+    entries = acl.entries.reject{|entry| entry.port_range.to_a[0].nil?}.collect do |entry|
       {
         cidr_block: entry.cidr_block,
         egress: entry.egress,
