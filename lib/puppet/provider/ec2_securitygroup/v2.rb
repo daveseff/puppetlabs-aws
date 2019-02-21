@@ -43,7 +43,7 @@ Puppet::Type.type(:ec2_securitygroup).provide(:v2, :parent => PuppetX::Puppetlab
     end
   end
 
-  def self.prepare_rule_for_puppet(region, rule, groups, group = nil, cidr = nil)
+  def self.prepare_rule_for_puppet(region, rule, groups, group = nil, cidr = nil, prefix_list = nil)
     config = {
       'protocol' => rule.ip_protocol,
       'from_port' => rule.from_port.to_i,
@@ -75,6 +75,9 @@ Puppet::Type.type(:ec2_securitygroup).provide(:v2, :parent => PuppetX::Puppetlab
       end
       rule.ip_ranges.each do |cidr|
         addition << prepare_rule_for_puppet(region, rule, groups, nil, cidr)
+      end
+      rule.prefix_list_ids.each do |prefix_list|
+        addition << prepare_rule_for_puppet(region, rule, groups, nil, nil, prefix_list)
       end
       addition << prepare_rule_for_puppet(region, rule, groups) if addition.empty?
       rules << addition
