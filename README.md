@@ -20,6 +20,14 @@ Status](https://travis-ci.org/puppetlabs/puppetlabs-aws.svg?branch=master)](http
   * [Parameters](#parameters)
 6. [Limitations - OS compatibility, etc.](#limitations)
 
+## Future
+
+The [Amazon AWS](https://forge.puppet.com/puppetlabs/amazon_aws) module, which supersedes this module, supports over 2600 tasks, types, providers, and the Resource API.
+
+To try it out, visit the [Puppet Forge](https://forge.puppet.com/puppetlabs/amazon_aws) or view the [Github repo](https://github.com/puppetlabs/puppetlabs-amazon_aws).
+
+This [AWS module](https://github.com/puppetlabs/puppetlabs-aws) will eventually deprecate in the future.
+
 ## Overview
 
 The aws module manages Amazon Web Services (AWS) resources to build out cloud infrastructure.
@@ -54,7 +62,7 @@ This module now includes tasks which will facilitate in installing the module de
   export AWS_SECRET_ACCESS_KEY=your_secret_access_key
   ```
 
-  Alternatively, you can place the credentials in a file at `~/.aws/credentials` or `puppetlabs_aws_configuration.ini` in the Puppet confdir ('$settings::confdir') based on the following template:
+  Alternatively, you can place the credentials in a file at `~/.aws/credentials` or `puppetlabs_aws_credentials.ini` in the Puppet confdir ('$settings::confdir') based on the following template:
 
   ```bash
  [default]
@@ -162,6 +170,7 @@ ec2_instance { 'name-of-instance':
   key_name          => 'name-of-existing-key',
   subnet            => 'name-of-subnet',
   security_groups   => ['name-of-security-group'],
+  block_devices       => [ {"delete_on_termination"=>"true", "device_name"=>"/dev/sdc", "volume_size"=>100, "encrypted"=>"Yes",}, {"delete_on_termination"=>"true", "device_name"=>"/dev/sde", "volume_size"=>1000, "encrypted"=>"Yes",}, ],
   tags              => {
     tag_name => 'value',
   },
@@ -215,52 +224,6 @@ elb_loadbalancer { 'name-of-load-balancer':
 
 To destroy any of these resources, set `ensure => absent`.
 
-### Creating a stack
-
-Let's create a simple stack, with a load balancer, instances, and security groups.
-
-```
-                          WWW
-                           +
-                           |
-          +----------------|-----------------+
-          |     +----------v-----------+     |
-    lb-sg |     |         lb-1         |     |
-          |     +----+------------+----+     |
-          +----------|------------|----------+
-          +----------|------------|----------+
-          |     +----v----+  +----v----+     |
-          |     |         |  |         |     |
-   web-sg |     |  web-1  |  |  web-2  |     |
-          |     |         |  |         |     |
-          |     +----+----+  +----+----+     |
-          +----------|------------|----------+
-          +----------|------------|----------+
-          |     +----v----+       |          |
-          |     |         |       |          |
-    db-sg |     |  db-1   <-------+          |
-          |     |         |                  |
-          |     +---------+                  |
-          +----------------------------------+
-```
-
-We've supplied code for the creation of this stack in this module's tests directory. To run this code with Puppet apply, run:
-
-``` bash
-puppet apply tests/create.pp --test
-```
-
-If you want to try this out from this directory without installing the module, run the following:
-
-```bash
-puppet apply tests/create.pp --modulepath ../ --test
-```
-
-To destroy the resources created by the above, run the following:
-
-```bash
-puppet apply tests/destroy.pp --test
-```
 
 ### Managing resources from the command line
 
@@ -761,6 +724,8 @@ Valid values are:
 
 Valid IPv4 address.
 
+If `private_ip_address` is set to `auto`, it is ignored (instead auto-assignment will be used).
+
 ##### `associate_public_ip_address`
 
 Optional.
@@ -918,6 +883,11 @@ Optional.
 Rules for ingress traffic.
 
 Accepts an array.
+
+##### `egress`
+Optional.
+
+Rules for egress traffic. Accepts an array. If no egress rules are specified, the security group will default to ALL outbound traffic allowed.
 
 ##### `id`
 
