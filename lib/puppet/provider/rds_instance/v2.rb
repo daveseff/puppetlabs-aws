@@ -255,7 +255,8 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
 
       if @property_flush.keys.size > 0
         rds_instance_update = {
-          db_instance_identifier: @property_hash[:name]
+          db_instance_identifier: @property_hash[:name],
+          apply_immediately: true
         }
 
         # The only items in the @property_flush should map directly to the
