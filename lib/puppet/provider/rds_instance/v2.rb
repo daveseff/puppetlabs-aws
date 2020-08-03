@@ -204,8 +204,9 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
         :engine_version,
         :master_user_password,
         :master_username,
-        :vpc_security_group_ids,
       ]
+
+        # :vpc_security_group_ids,
 
       if ['mariadb', 'mysql', 'postgres'].include?(resource[:engine].downcase)
         remove_from_config << :db_name
