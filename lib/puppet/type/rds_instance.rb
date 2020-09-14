@@ -251,10 +251,5 @@ Not applicable. Must be null.'
 
   newproperty(:auto_minor_version_upgrade) do
     desc 'Have Auto Minor Version Upgrade enabled.'
-    defaultto :false
-    newvalues(:false, :'false', :'true')
-    def insync?(is)
-      is.to_s == should.to_s
-    end
   end
 end
