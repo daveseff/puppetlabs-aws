@@ -249,7 +249,7 @@ Not applicable. Must be null.'
     desc 'Copy all tags from the DB instance to snapshots of the DB instance.'
   end
 
-  newparam(:auto_minor_version_upgrade) do
+  newproperty(:auto_minor_version_upgrade) do
     desc 'Have Auto Minor Version Upgrade enabled.'
     defaultto :false
     newvalues(:false, :'false', :'true')
