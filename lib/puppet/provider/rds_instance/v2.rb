@@ -73,7 +73,8 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
       backup_retention_period: instance.backup_retention_period,
       copy_tags_to_snapshot: instance.copy_tags_to_snapshot,
       availability_zone: instance.availability_zone,
-      arn: instance.db_instance_arn
+      arn: instance.db_instance_arn,
+      auto_minor_version_upgrade: instance.auto_minor_version_upgrade
     }
 
     if instance.respond_to?('endpoint') && !instance.endpoint.nil?
@@ -187,6 +188,7 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
       backup_retention_period: resource[:backup_retention_period],
       copy_tags_to_snapshot: resource[:copy_tags_to_snapshot],
       availability_zone: resource[:availability_zone],
+      auto_minor_version_upgrade: resource[:auto_minor_version_upgrade],
       tags: tags,
     }
 
