@@ -128,7 +128,21 @@ Puppet::Type.newtype(:ec2_instance) do
   newproperty(:tenancy) do
     desc 'The instance tenancy: default or dedicated.'
     defaultto :default
-    newvalues(:default, :dedicated)
+    newvalues(:default, :dedicated, :host)
+  end
+
+  newproperty(:host_id) do
+    desc 'The dedicated host to pin this instance to'
+    validate do |value|
+      fail 'instance_type should be a String' unless value.is_a?(String)
+    end
+  end
+
+  newproperty(:affinity) do
+    desc 'The type if affinity to apply to dedicated instance'
+    validate do |value|
+      fail 'instance_type should be a String' unless value.is_a?(String)
+    end
   end
 
   newproperty(:instance_id) do
@@ -194,6 +208,10 @@ Puppet::Type.newtype(:ec2_instance) do
     def insync?(is)
       is.to_s == should.to_s
     end
+  end
+
+  newproperty(:termination_protection) do
+    desc 'Whether or not tom enable termination protection for this instance.'
   end
 
   newparam(:instance_initiated_shutdown_behavior) do

@@ -42,7 +42,6 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
   def self.db_instance_to_hash(region, instance)
     db_subnet = instance.db_subnet_group ? instance.db_subnet_group.db_subnet_group_name : nil
 
-    # tags stuff requires aws sdk >= 2.6.11
     rds_tags = {}
     db_tags = rds_client(region).list_tags_for_resource( resource_name: instance.db_instance_arn )
     db_tags.tag_list.each do |rds_tag|
@@ -72,8 +71,10 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
       db_security_groups: instance.db_security_groups.collect(&:db_security_group_name),
       vpc_security_groups: vpc_security_groups,
       backup_retention_period: instance.backup_retention_period,
+      copy_tags_to_snapshot: instance.copy_tags_to_snapshot,
       availability_zone: instance.availability_zone,
-      arn: instance.db_instance_arn
+      arn: instance.db_instance_arn,
+      auto_minor_version_upgrade: instance.auto_minor_version_upgrade
     }
 
     if instance.respond_to?('endpoint') && !instance.endpoint.nil?
@@ -185,7 +186,9 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
       vpc_security_group_ids: vpc_sg_ids,
       option_group_name: resource[:db_option_group],
       backup_retention_period: resource[:backup_retention_period],
+      copy_tags_to_snapshot: resource[:copy_tags_to_snapshot],
       availability_zone: resource[:availability_zone],
+      auto_minor_version_upgrade: resource[:auto_minor_version_upgrade],
       tags: tags,
     }
 
@@ -203,8 +206,9 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
         :engine_version,
         :master_user_password,
         :master_username,
-        :vpc_security_group_ids,
       ]
+
+        # :vpc_security_group_ids,
 
       if ['mariadb', 'mysql', 'postgres'].include?(resource[:engine].downcase)
         remove_from_config << :db_name
@@ -216,8 +220,18 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
 
       rds_client(resource[:region]).restore_db_instance_from_db_snapshot(config)
     else
+      if resource[:engine].start_with?('sqlserver')
+        config[:timezone] = resource[:timezone]
+      end
       Puppet.info("Starting DB instance #{name}")
       rds_client(resource[:region]).create_db_instance(config)
+    end
+
+    with_retries(:max_tries => 5) do
+      rds_client(region).add_tags_to_resource(
+        resources: response.data.db_instance.db_instance_arn,
+        tags: tags_for_resource
+      )
     end
 
     @property_hash[:ensure] = :present
@@ -244,7 +258,8 @@ Puppet::Type.type(:rds_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
 
       if @property_flush.keys.size > 0
         rds_instance_update = {
-          db_instance_identifier: @property_hash[:name]
+          db_instance_identifier: @property_hash[:name],
+          apply_immediately: true
         }
 
         # The only items in the @property_flush should map directly to the

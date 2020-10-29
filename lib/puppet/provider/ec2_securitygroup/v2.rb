@@ -43,7 +43,7 @@ Puppet::Type.type(:ec2_securitygroup).provide(:v2, :parent => PuppetX::Puppetlab
     end
   end
 
-  def self.prepare_rule_for_puppet(region, rule, groups, group = nil, cidr = nil)
+  def self.prepare_rule_for_puppet(region, rule, groups, group = nil, cidr = nil, prefix_list = nil)
     config = {
       'protocol' => rule.ip_protocol,
       'from_port' => rule.from_port.to_i,
@@ -57,6 +57,7 @@ Puppet::Type.type(:ec2_securitygroup).provide(:v2, :parent => PuppetX::Puppetlab
       config['security_group'] = name
     end
     config['cidr'] = cidr.cidr_ip if cidr
+    config['prefix_list_id'] = prefix_list.prefix_list_id if prefix_list
     config
   end
 
@@ -74,6 +75,9 @@ Puppet::Type.type(:ec2_securitygroup).provide(:v2, :parent => PuppetX::Puppetlab
       end
       rule.ip_ranges.each do |cidr|
         addition << prepare_rule_for_puppet(region, rule, groups, nil, cidr)
+      end
+      rule.prefix_list_ids.each do |prefix_list|
+        addition << prepare_rule_for_puppet(region, rule, groups, nil, nil, prefix_list)
       end
       addition << prepare_rule_for_puppet(region, rule, groups) if addition.empty?
       rules << addition
@@ -97,7 +101,7 @@ Puppet::Type.type(:ec2_securitygroup).provide(:v2, :parent => PuppetX::Puppetlab
   end
 
   def exists?
-    Puppet.debug("Checking if security group #{name} exists in region #{target_region}")
+    Puppet.info("Checking if security group #{name} exists in region #{target_region}")
     @property_hash[:ensure] == :present
   end
 
@@ -184,10 +188,12 @@ Puppet::Type.type(:ec2_securitygroup).provide(:v2, :parent => PuppetX::Puppetlab
         end
       elsif rule.key? 'cidr'
         permission[:ip_ranges] = [{cidr_ip: rule['cidr']}]
+      elsif rule.key? 'prefix_list_id'
+        permission[:prefix_list_ids] = [{prefix_list_id: rule['prefix_list_id']}]
       end
 
       # Skip the permission if it has no peer.
-      rule_hash[:ip_permissions] << permission unless (permission.keys & [:user_id_group_pairs, :ip_ranges]).empty?
+      rule_hash[:ip_permissions] << permission unless (permission.keys & [:user_id_group_pairs, :ip_ranges, :prefix_list_ids]).empty?
     end
 
     rule_hash[:ip_permissions].any? ? rule_hash : nil

@@ -56,6 +56,7 @@ Puppet::Type.type(:ec2_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
   end
 
   def self.instance_to_hash(region, instance, subnets)
+    ec2 = ec2_client(region)
     name = extract_name_from_tag(instance)
     return {} unless name
     tags = {}
@@ -90,6 +91,9 @@ Puppet::Type.type(:ec2_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
       }
     end
 
+    # Find the setting for termination protection
+    term_att = ec2.describe_instance_attribute({ attribute: 'disableApiTermination', instance_id: instance.instance_id}).disable_api_termination.value
+
     config = {
       name: name,
       instance_type: instance.instance_type,
@@ -103,7 +107,10 @@ Puppet::Type.type(:ec2_instance).provide(:v2, :parent => PuppetX::Puppetlabs::Aw
       tags: tags,
       region: region,
       tenancy: instance.placement.tenancy,
+      host_id: instance.placement.host_id,
+      affinity: instance.placement.affinity,
       hypervisor: instance.hypervisor,
+      termination_protection: term_att,
       iam_instance_profile_arn: instance.iam_instance_profile ? instance.iam_instance_profile.arn : nil,
       virtualization_type: instance.virtualization_type,
       security_groups: instance.security_groups.collect(&:group_name),
@@ -302,6 +309,7 @@ Found #{matching_groups.length}:
         instance_type: resource[:instance_type],
         user_data: data,
         ebs_optimized: resource[:ebs_optimized].to_s,
+        disable_api_termination: resource[:termination_protection],
         instance_initiated_shutdown_behavior: resource[:instance_initiated_shutdown_behavior].to_s,
         iam_instance_profile: resource[:iam_instance_profile_arn] ?
           Hash['arn' => resource[:iam_instance_profile_arn]] :
@@ -309,6 +317,8 @@ Found #{matching_groups.length}:
         placement: {
           availability_zone: resource[:availability_zone],
           tenancy: resource[:tenancy],
+          host_id: resource[:host_id],
+          affinity: resource[:affinity],
         },
         monitoring: {
           enabled: resource[:monitoring].to_s,

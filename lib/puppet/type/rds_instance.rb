@@ -203,6 +203,13 @@ Not applicable. Must be null.'
     end
   end
 
+  newproperty(:timezone) do
+    desc 'The time zone of the DB instance. The time zone parameter is currently supported only by Microsoft SQL Server.'
+    validate do |value|
+      fail 'db_option_group should be a String' unless value.is_a?(String)
+    end
+  end
+
   newparam(:final_db_snapshot_identifier) do
     desc 'Name given to the last snapshot on deletion.'
     validate do |value|
@@ -236,5 +243,13 @@ Not applicable. Must be null.'
 
   newproperty(:rds_tags, :parent => PuppetX::Property::AwsTag) do
     desc 'The tags for the db instance.'
+  end
+
+  newproperty(:copy_tags_to_snapshot) do
+    desc 'Copy all tags from the DB instance to snapshots of the DB instance.'
+  end
+
+  newproperty(:auto_minor_version_upgrade) do
+    desc 'Have Auto Minor Version Upgrade enabled.'
   end
 end
